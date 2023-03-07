@@ -11,7 +11,13 @@
 #include <cstring>
 #include <sstream>
 
+char del = ',';
 std::vector<db_compress::BiMap> enum_map;
+
+std::ifstream::pos_type filesize(const char *filename) {
+    std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+    return in.tellg();
+}
 
 int EnumTranslate(const std::string &str, int attr) {
     db_compress::BiMap &map = enum_map[attr];
@@ -43,7 +49,7 @@ public:
     }
 };
 
-const int NonFullPassStopPoint = 2000;
+const int NonFullPassStopPoint = 20000;
 
 char inputFileName[100], outputFileName[100], configFileName[100];
 bool compress;
@@ -57,8 +63,8 @@ std::vector<db_compress::StringAttrValue> str_vec;
 
 void PrintHelpInfo() {
     std::cout << "Usage:\n";
-    std::cout << "Compression: sample -c input_file output_file config_file\n";
-    std::cout << "Decompression: sample -d input_file output_file config_file\n";
+    std::cout << "Compression: sample -c input_file config_file is_special_del\n";
+    std::cout << "Decompression: sample -d input_file config_file is_special_del\n";
 }
 
 // Read inputFileName, outputFileName, configFileName and whether to
@@ -70,8 +76,12 @@ bool ReadParameter(int argc, char **argv) {
     else return false;
 
     strcpy(inputFileName, argv[2]);
-    strcpy(outputFileName, argv[3]);
-    strcpy(configFileName, argv[4]);
+    strcpy(outputFileName, inputFileName);
+    strcat(outputFileName, compress ? ".squish" : ".rec");
+    strcpy(configFileName, argv[3]);
+    int is_special = std::stoi(argv[4]);
+    if (is_special) del = '|';
+    std::cout << "Delimiter: " << del << "\n";
     return true;
 }
 
@@ -81,17 +91,18 @@ void ReadConfig(char *configFileName) {
     std::vector<int> type;
     std::vector<double> err;
     attr_type.clear();
-    config.sort_by_attr = -1;
+    config.sort_by_attr = 0;
 
     while (std::getline(fin, str)) {
         std::vector<std::string> vec;
         std::string item;
         std::stringstream sstream(str);
         while (std::getline(sstream, item, ' ')) {
+            if (item.back() == '\r') item.pop_back();
             vec.push_back(item);
         }
         if (vec[0] == "SORT") {
-            config.sort_by_attr = std::stoi(vec[3]) - 1;
+            continue;
         } else {
             int type_ = type.size();
             type.push_back(type_);
@@ -184,8 +195,10 @@ int main(int argc, char **argv) {
             std::cerr << "Bad Parameters.\n";
             return 1;
         }
+        std::ios::sync_with_stdio(false);
         ReadConfig(configFileName);
         if (compress) {
+            int64_t com_time = 0;
             // Compress
             db_compress::Compressor compressor(outputFileName, schema, config);
             int iter_cnt = 0;
@@ -200,28 +213,52 @@ int main(int argc, char **argv) {
                     db_compress::Tuple tuple(schema.attr_type.size());
 
                     size_t count = 0;
-                    while (std::getline(sstream, item, ',')) {
+                    while (std::getline(sstream, item, del)) {
+                        if (del == ',') {
+                            if (!item.empty() && item[0] == '"') {
+                                item = item.substr(1);
+                                item += ',';
+                                std::string item2;
+                                if (std::getline(sstream, item2, '"'))
+                                    item += item2;
+
+                                std::getline(sstream, item2, del);
+                            }
+                        }
                         AppendAttr(&tuple, item, attr_type[count], count);
                         ++count;
                     }
                     // The last item might be empty string
-                    if (str[str.length() - 1] == ',') {
+                    if (str[str.length() - 1] == del) {
                         AppendAttr(&tuple, "", attr_type[count], count);
                         ++count;
                     }
                     if (count != attr_type.size()) {
-                        std::cerr << "File Format Error!\n";
+                        std::cerr << "File Format Error!" << "\t" << count << "\t" << attr_type.size() << std::endl;
                     }
+                    auto s = std::chrono::high_resolution_clock::now();
                     compressor.ReadTuple(tuple);
+                    auto e = std::chrono::high_resolution_clock::now();
+                    auto d = std::chrono::duration_cast<std::chrono::microseconds>(e - s);
+                    com_time += d.count();
+
                     if (!compressor.RequireFullPass() &&
                         ++tuple_cnt >= NonFullPassStopPoint) {
                         break;
                     }
                 }
+                auto s = std::chrono::high_resolution_clock::now();
                 compressor.EndOfData();
+                auto e = std::chrono::high_resolution_clock::now();
+                auto d = std::chrono::duration_cast<std::chrono::microseconds>(e - s);
+                com_time += d.count();
                 if (!compressor.RequireMoreIterations())
                     break;
             }
+            int32_t file_size = filesize(outputFileName);
+            std::cout << "Compress Time: " << com_time / 1e6 << "s" << "\t"
+                      << "File Size: " << file_size << "byte" << std::endl;
+
             // write down enum attrs.
             db_compress::Write(enum_map);
         } else {
@@ -238,7 +275,7 @@ int main(int argc, char **argv) {
 
                 for (size_t i = 0; i < attr_type.size(); ++i) {
                     std::string str = ExtractAttr(tuple, attr_type[i], i);
-                    outFile << str << (i == attr_type.size() - 1 ? '\n' : ',');
+                    outFile << str << (i == attr_type.size() - 1 ? '\n' : del);
                 }
             }
         }
