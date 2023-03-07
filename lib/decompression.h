@@ -36,7 +36,7 @@ namespace db_compress {
         bool HasNext() const;
 
         ~Decompressor() {
-            std::cout << "Time:  "
+            std::cout << "Decompress Time: "
                       << static_cast<double>(duration.count()) *
                          std::chrono::microseconds::period::num /
                          std::chrono::microseconds::period::den

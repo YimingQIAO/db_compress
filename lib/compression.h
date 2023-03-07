@@ -39,7 +39,7 @@ namespace db_compress {
         void EndOfData();
 
         ~Compressor() {
-            std::cout << "Time:  "
+            std::cout << "Compression Time: "
                       << static_cast<double>(duration.count()) *
                          std::chrono::microseconds::period::num /
                          std::chrono::microseconds::period::den

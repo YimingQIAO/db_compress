@@ -121,13 +121,11 @@ namespace db_compress {
                 BitString bit_string;
                 auto start = std::chrono::system_clock::now();
                 ConvertTupleToBitString(tuple, schema_, model_, attr_order_, &bit_string);
-                auto end = std::chrono::system_clock::now();
-                duration +=
-                        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-
                 if (bit_string.length < implicit_prefix_length_)
                     PadBitString(&bit_string, implicit_prefix_length_);
                 int block_index = ComputePrefix(bit_string, implicit_prefix_length_) + 1;
+                auto end = std::chrono::system_clock::now();
+                duration += std::chrono::duration_cast<std::chrono::microseconds>(end - start);
                 // We need to write the prefix 0 of each tuple bit string
                 byte_writer_->WriteLess(0, 1, block_index);
                 WriteBitString(byte_writer_.get(), bit_string, implicit_prefix_length_, block_index);

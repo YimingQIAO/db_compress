@@ -49,7 +49,7 @@ public:
     }
 };
 
-const int NonFullPassStopPoint = 20000;
+const int NonFullPassStopPoint = 2000;
 
 char inputFileName[100], outputFileName[100], configFileName[100];
 bool compress;
@@ -198,12 +198,11 @@ int main(int argc, char **argv) {
         std::ios::sync_with_stdio(false);
         ReadConfig(configFileName);
         if (compress) {
-            int64_t com_time = 0;
             // Compress
             db_compress::Compressor compressor(outputFileName, schema, config);
             int iter_cnt = 0;
             while (1) {
-                std::cout << "Iteration " << ++iter_cnt << " Starts\n";
+                std::cout << "Iteration " << ++iter_cnt << " Starts" << std::endl;
                 std::ifstream inFile(inputFileName);
                 std::string str;
                 int tuple_cnt = 0;
@@ -236,35 +235,26 @@ int main(int argc, char **argv) {
                     if (count != attr_type.size()) {
                         std::cerr << "File Format Error!" << "\t" << count << "\t" << attr_type.size() << std::endl;
                     }
-                    auto s = std::chrono::high_resolution_clock::now();
                     compressor.ReadTuple(tuple);
-                    auto e = std::chrono::high_resolution_clock::now();
-                    auto d = std::chrono::duration_cast<std::chrono::microseconds>(e - s);
-                    com_time += d.count();
 
                     if (!compressor.RequireFullPass() &&
                         ++tuple_cnt >= NonFullPassStopPoint) {
                         break;
                     }
                 }
-                auto s = std::chrono::high_resolution_clock::now();
                 compressor.EndOfData();
-                auto e = std::chrono::high_resolution_clock::now();
-                auto d = std::chrono::duration_cast<std::chrono::microseconds>(e - s);
-                com_time += d.count();
                 if (!compressor.RequireMoreIterations())
                     break;
             }
             int32_t file_size = filesize(outputFileName);
-            std::cout << "Compress Time: " << com_time / 1e6 << "s" << "\t"
-                      << "File Size: " << file_size << "byte" << std::endl;
+            std::cout << "File Size: " << file_size << "byte" << std::endl;
 
             // write down enum attrs.
-            db_compress::Write(enum_map);
+            db_compress::Write(enum_map, std::string());
         } else {
             // Decompress
             // Load enum values
-            db_compress::Read(enum_map);
+            db_compress::Read(enum_map, std::string());
 
             db_compress::Decompressor decompressor(inputFileName, schema);
             std::ofstream outFile(outputFileName);

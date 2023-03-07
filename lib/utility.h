@@ -222,10 +222,10 @@ inline unsigned ComputePrefix(const BitString& bit_string, int prefix_length) {
 void GetBitStringFromProbInterval(BitString *str, const ProbInterval& prob);
 
 // This writes a vector of non-trivial data types.
-    void Write(const std::vector<BiMap> &data);
+    void Write(const std::vector<BiMap> &data, const std::string& table_name);
 
 // This reads a vector of non-trivial data types.
-    void Read(std::vector<BiMap> &data);
+    void Read(std::vector<BiMap> &data, const std::string& table_name);
 } // namespace db_compress
 
 #endif
